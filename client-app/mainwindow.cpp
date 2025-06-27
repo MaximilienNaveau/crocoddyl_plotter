@@ -129,8 +129,8 @@ void MainWindow::setupColorMap() {
       QCP::iRangeDrag | QCP::iRangeZoom); // this will also allow rescaling the
                                           // color scale by dragging/zooming
   colorPlot->axisRect()->setupFullAxesBox(true);
-  colorPlot->xAxis->setLabel("Cost");
-  colorPlot->yAxis->setLabel("OCP variables");
+  colorPlot->xAxis->setLabel("OCP variables");
+  colorPlot->yAxis->setLabel("Cost");
 
   // set up the QCPColorMap:
   colorMap = new QCPColorMap(colorPlot->xAxis, colorPlot->yAxis);

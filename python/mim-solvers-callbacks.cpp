@@ -15,10 +15,10 @@ namespace crocoddyl_plotter {
 void exposeCallbacks() {
 //   bp::register_ptr_to_python<std::shared_ptr<CallbackAbstract> >();
 
-  bp::class_<MimSolversPlotter, bp::bases<mim_solvers::CallbackAbstract>, boost::noncopyable>(
-      "MimSolversPlotter", "Callback function for sending data over network.",
+  bp::class_<CrocoddylPlotterServer, boost::noncopyable>(
+      "CrocoddylPlotterServer", "Callback function for sending data over network.",
       bp::init<std::string>("Initialize the callback.", bp::arg("url")="0.0.0.0:1234"))
-      .def("send", &MimSolversPlotter::send)
+      .def("send", &CrocoddylPlotterServer::send)
       ;
 }
 

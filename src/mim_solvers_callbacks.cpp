@@ -47,7 +47,7 @@ typedef ActionDataAbstract::MatrixXs MatrixXs;
 typedef Eigen::Map<VectorXs> VectorMapXs;
 typedef Eigen::Map<MatrixXs> MatrixMapXs;
 
-class MimSolversPlotterImpl final : public CrocoddylPlotter::Service {
+class CrocoddylPlotterImpl final : public CrocoddylPlotter::Service {
 public:
   // CrocoddylPlotter service_;
   std::unique_ptr<grpc::Server> server_;
@@ -204,7 +204,7 @@ public:
   void start(std::string url) {
     if (server_)
       throw std::runtime_error("A server is already running");
-    serverThread_ = std::thread(&MimSolversPlotterImpl::runServer, this, url);
+    serverThread_ = std::thread(&CrocoddylPlotterImpl::runServer, this, url);
   }
 
   void shutdown() {
@@ -275,28 +275,19 @@ private:
   }
 };
 
-MimSolversPlotter::MimSolversPlotter(std::string url)
-    : mim_solvers::CallbackAbstract(), impl_(new MimSolversPlotterImpl) {
+CrocoddylPlotterServer::CrocoddylPlotterServer(std::string url)
+    : impl_(new CrocoddylPlotterImpl) {
   impl_->start(url);
 }
 
-MimSolversPlotter::~MimSolversPlotter() { impl_->shutdown(); }
+CrocoddylPlotterServer::~CrocoddylPlotterServer() { impl_->shutdown(); }
 
-bool MimSolversPlotter::send(
+bool CrocoddylPlotterServer::send(
     const std::shared_ptr<crocoddyl::ShootingProblem> &problem, int iteration) {
   return impl_->send(problem, iteration);
 }
 
-void MimSolversPlotter::operator()(crocoddyl::SolverAbstract &solver) {
-  send(solver.get_problem(), 0);
-}
-
-void MimSolversPlotter::operator()(crocoddyl::SolverAbstract &solver,
-                                   std::string) {
-  (*this)(solver);
-}
-
-bool MimSolversPlotterImpl::send(
+bool CrocoddylPlotterImpl::send(
     const std::shared_ptr<crocoddyl::ShootingProblem> &problem, int iteration) {
   std::unique_lock lk(dataReadyMutex_, std::defer_lock);
   // If data not sent, don't override the current data.
