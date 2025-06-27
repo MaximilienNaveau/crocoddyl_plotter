@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package crocoddyl_plotter;
+
+import "google/protobuf/empty.proto";
+
+message Costd {
+    double cost = 1;
+    repeated double Lx = 2;
+    repeated double Lu = 3;
+}
+message Noded {
+    repeated Costd costs = 1;
+}
+message OCPd {
+    uint32 iteration = 1;
+    repeated Noded nodes = 2;
+}
+
+service CrocoddylPlotter {
+  rpc GetOCPData(google.protobuf.Empty) returns (stream OCPd) {}
+}
