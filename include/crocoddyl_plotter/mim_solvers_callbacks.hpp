@@ -11,7 +11,7 @@ class MimSolversPlotter : public mim_solvers::CallbackAbstract {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  explicit MimSolversPlotter();
+  explicit MimSolversPlotter(std::string url = "0.0.0.0:1234");
   ~MimSolversPlotter() override;
 
   bool send(const std::shared_ptr<crocoddyl::ShootingProblem>& problem, int iteration);

@@ -8,6 +8,7 @@ message Costd {
     double cost = 1;
     repeated double Lx = 2;
     repeated double Lu = 3;
+    string name = 4;
 }
 message Noded {
     repeated Costd costs = 1;

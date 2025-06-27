@@ -64,9 +64,11 @@ public:
       FreeFwdDynamics,
     } differentialModelType = Unknown;
 
+    std::vector<Scalar> weights;
     std::vector<Scalar> cost;
     std::vector<VectorXs> Lx;
     std::vector<VectorXs> Lu;
+    std::vector<std::string> names;
 
     void init(const std::shared_ptr<ActionModelAbstract> &am,
               const std::shared_ptr<ActionDataAbstract> &ad) {
@@ -99,12 +101,17 @@ public:
       const auto &cdc = cd->costs;
 
       cost.resize(cmc.size());
+      weights.resize(cmc.size());
       Lx.resize(cmc.size());
       Lu.resize(cmc.size());
+      names.resize(cmc.size());
       int i = 0;
       for (auto const &it : cdc) {
         Lx[i].resizeLike(it.second->Lx);
         Lu[i].resizeLike(it.second->Lu);
+        Lx[i].setZero();
+        Lu[i].setZero();
+        names[i] = it.first;
         ++i;
       }
     }
@@ -139,20 +146,25 @@ public:
 
     void read(const std::shared_ptr<ActionModelAbstract> &am,
               const std::shared_ptr<ActionDataAbstract> &ad) {
+      auto &cm = get_costs(am);
       auto &cd = get_costs(ad);
 
+      const auto &cmc = cm->get_costs();
       const auto &cdc = cd->costs;
 
       int i = 0;
-      for (auto const &it : cdc) {
-        cost[i] = it.second->cost;
-        Lx[i].swap(it.second->Lx);
-        Lu[i].swap(it.second->Lu);
+      auto it_m = cmc.cbegin();
+      for (auto const &it_d : cdc) {
+        cost[i] = it_d.second->cost;
+        weights[i] = it_m->second->weight;
+        Lx[i].swap(it_d.second->Lx);
+        Lu[i].swap(it_d.second->Lu);
         ++i;
+        ++it_m;
       }
     }
 
-    void write(Noded &node) {
+    void write(Noded &node, bool writeNames) {
       auto *cs = node.mutable_costs();
 
       cs->Reserve(cost.size());
@@ -164,12 +176,17 @@ public:
       }
 
       for (int i = 0; i < cost.size(); ++i) {
+        const Scalar& w = weights[i];
         auto &c = cs->at(i);
         c.mutable_lx()->Resize(Lx[i].size(), Scalar(0));
         c.mutable_lu()->Resize(Lu[i].size(), Scalar(0));
-        c.set_cost(cost[i]);
-        VectorMapXs(c.mutable_lx()->mutable_data(), Lx[i].size()) = Lx[i];
-        VectorMapXs(c.mutable_lu()->mutable_data(), Lu[i].size()) = Lu[i];
+        c.set_cost(w*cost[i]);
+        VectorMapXs(c.mutable_lx()->mutable_data(), Lx[i].size()) = w*Lx[i];
+        VectorMapXs(c.mutable_lu()->mutable_data(), Lu[i].size()) = w*Lu[i];
+        if (writeNames)
+          c.set_name(names[i]);
+        else
+          c.clear_name();
         // c.mutable_lx()->Assign(Lx[i].data(), Lx[i].data() + Lx[i].size());
         // c.mutable_lu()->Assign(Lu[i].data(), Lu[i].data() + Lu[i].size());
       }
@@ -180,53 +197,66 @@ public:
   // dataSent_ is not required as is. It depends on the desired behavior.
   bool dataSent_ = true;
   bool dataReadyToSend_ = false;
+  bool shutdownRequested_ = false;
   std::mutex dataReadyMutex_;
   std::condition_variable dataReadyCondition_;
 
-  void start() {
+  void start(std::string url) {
     if (server_)
       throw std::runtime_error("A server is already running");
-    serverThread_ = std::thread(&MimSolversPlotterImpl::runServer, this);
+    serverThread_ = std::thread(&MimSolversPlotterImpl::runServer, this, url);
   }
 
   void shutdown() {
     if (server_) {
+      std::cout << "Server shutting down..." << std::flush;
+      shutdownRequested_ = true;
+      dataReadyCondition_.notify_one();
       server_->Shutdown();
       serverThread_.join();
+      std::cout << " done." << std::endl;
     }
   }
 
-  bool send(const std::shared_ptr<crocoddyl::ShootingProblem> &problem);
+  bool send(const std::shared_ptr<crocoddyl::ShootingProblem> &problem,
+            int iteration);
 
   grpc::Status GetOCPData(grpc::ServerContext *context,
                           const google::protobuf::Empty *request,
                           grpc::ServerWriter<OCPd> *writer) override {
-    std::unique_lock lk(dataReadyMutex_);
+    bool firstMessage = true;
+    std::unique_lock lk(dataReadyMutex_, std::defer_lock);
+
     while (true) {
-      dataReadyCondition_.wait(lk, [&] { return dataReadyToSend_; });
+      lk.lock();
+      // std::cout << "GetOCPData waits to sent data" << std::endl;
+      while (!(shutdownRequested_ || dataReadyToSend_))
+        dataReadyCondition_.wait(lk);
+      // lk, [&] { return shutdownRequested_ || dataReadyToSend_; });
+      if (shutdownRequested_ || context->IsCancelled()) {
+        std::cout << "GetOCPData stopping." << std::endl;
+        lk.unlock();
+        break;
+      }
+
       nodes_.set_iteration(iteration_);
       for (int i = 0; i < nodeConverters_.size(); ++i) {
-        nodeConverters_[i].write(nodes_.mutable_nodes()->at(i));
+        nodeConverters_[i].write(nodes_.mutable_nodes()->at(i), firstMessage);
       }
+      firstMessage = false;
       dataSent_ = true;
       dataReadyToSend_ = false;
+      // std::cout << "Unlocking" << std::endl;
       lk.unlock();
-      std::cout << "GetOCPData ready to send" << std::endl;
+      // std::cout << "GetOCPData ready to send" << std::endl;
       writer->Write(nodes_);
-      std::cout << "GetOCPData sent one data" << std::endl;
+      // std::cout << "GetOCPData sent one data" << std::endl;
     }
-    // if (writer_ != NULL) {
-    //   return grpc::Status(grpc::StatusCode::UNAVAILABLE,
-    //                       "GetOCPData can only be called once.");
-    // }
-    // writer_ = writer;
-    // TODO wait for something to tell when it is done
     return grpc::Status::OK;
   }
 
 private:
-  void runServer() {
-    std::string server_address("0.0.0.0:1234");
+  void runServer(std::string const server_address) {
 
     grpc::EnableDefaultHealthCheckService(true);
     grpc::ServerBuilder builder;
@@ -245,20 +275,20 @@ private:
   }
 };
 
-MimSolversPlotter::MimSolversPlotter()
+MimSolversPlotter::MimSolversPlotter(std::string url)
     : mim_solvers::CallbackAbstract(), impl_(new MimSolversPlotterImpl) {
-  impl_->start();
+  impl_->start(url);
 }
 
 MimSolversPlotter::~MimSolversPlotter() { impl_->shutdown(); }
 
 bool MimSolversPlotter::send(
-    const std::shared_ptr<crocoddyl::ShootingProblem> &problem) {
-  return impl_->send(problem);
+    const std::shared_ptr<crocoddyl::ShootingProblem> &problem, int iteration) {
+  return impl_->send(problem, iteration);
 }
 
 void MimSolversPlotter::operator()(crocoddyl::SolverAbstract &solver) {
-  send(solver.get_problem());
+  send(solver.get_problem(), 0);
 }
 
 void MimSolversPlotter::operator()(crocoddyl::SolverAbstract &solver,
@@ -268,16 +298,15 @@ void MimSolversPlotter::operator()(crocoddyl::SolverAbstract &solver,
 
 bool MimSolversPlotterImpl::send(
     const std::shared_ptr<crocoddyl::ShootingProblem> &problem, int iteration) {
-  std::cout << "start" << std::endl;
   std::unique_lock lk(dataReadyMutex_, std::defer_lock);
   // If data not sent, don't override the current data.
-  if (!dataSent_)
-    return false;
-  std::cout << "data sent" << std::endl;
   // If mutex is locked, we are sending data. Don't wait.
   if (!lk.try_lock())
     return false;
-  std::cout << "locked" << std::endl;
+  if (!dataSent_) {
+    lk.unlock();
+    return false;
+  }
   iteration_ = iteration;
   const std::size_t T = problem->get_T();
   const std::size_t N = T + 1;
@@ -304,8 +333,6 @@ bool MimSolversPlotterImpl::send(
       nodeConverters_[i].init(rms[i], rds[i]);
     }
     nodeConverters_[T].init(tm, td);
-
-    std::cout << "initialized " << N << ' ' << nodes_.nodes_size() << std::endl;
   }
 
   for (std::size_t i = 0; i < T; ++i) {
@@ -313,7 +340,7 @@ bool MimSolversPlotterImpl::send(
   }
   nodeConverters_[T].read(tm, td);
 
-  std::cout << "swapped" << std::endl;
+  dataSent_ = false;
   dataReadyToSend_ = true;
   lk.unlock();
   dataReadyCondition_.notify_one();

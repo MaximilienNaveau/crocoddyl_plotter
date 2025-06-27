@@ -17,7 +17,7 @@ void exposeCallbacks() {
 
   bp::class_<MimSolversPlotter, bp::bases<mim_solvers::CallbackAbstract>, boost::noncopyable>(
       "MimSolversPlotter", "Callback function for sending data over network.",
-      bp::init<>("Initialize the callback."))
+      bp::init<std::string>("Initialize the callback.", bp::arg("url")="0.0.0.0:1234"))
       .def("send", &MimSolversPlotter::send)
       ;
 }
