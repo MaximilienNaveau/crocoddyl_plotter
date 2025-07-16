@@ -10,7 +10,7 @@ message(STATUS "Python site lib: ${PYTHON_SITELIB}")
 set(PROTOC_INPUT_DIR ${CMAKE_SOURCE_DIR}/proto)
 
 set(OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-file(MAKE_DIRECTORY ${OUTPUT_DIR})
+file(MAKE_DIRECTORY ${OUTPUT_DIR}/crocoddyl_plotter)
 foreach(pyfile crocoddyl_plotter/__init__.py)
     file(COPY_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${pyfile}" ${OUTPUT_DIR}/${pyfile})
     list(APPEND REPO_PY_FILES ${OUTPUT_DIR}/${pyfile})

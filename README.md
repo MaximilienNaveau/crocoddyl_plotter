@@ -1,4 +1,13 @@
-Intended usage:
+## Crocoddyl plotter
+
+### Dependencies:
+
+```bash
+sudo apt install libgrpc++-dev protobuf-compiler-grpc python3-grpcio qt6-base-dev grpc-proto
+```
+<!-- python3-grpcio-tools ? -->
+
+### Intended usage:
 
 On crocoddyl side:
 ```python

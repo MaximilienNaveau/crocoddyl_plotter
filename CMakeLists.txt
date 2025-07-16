@@ -13,8 +13,7 @@ add_subdirectory(proto)
 add_subdirectory(python)
 add_subdirectory(client-app)
 
-add_library(crocoddyl_plotter SHARED
-src/mim_solvers_callbacks.cpp)
+add_library(crocoddyl_plotter SHARED src/mim_solvers_callbacks.cpp)
 target_include_directories(crocoddyl_plotter PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(crocoddyl_plotter PUBLIC crocoddyl_plotter_grpc_proto crocoddyl::crocoddyl)
 install(TARGETS crocoddyl_plotter DESTINATION lib)
