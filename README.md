@@ -3,7 +3,8 @@
 ### Dependencies:
 
 ```bash
-sudo apt install libgrpc++-dev protobuf-compiler-grpc python3-grpcio qt6-base-dev grpc-proto
+sudo apt install libgrpc++-dev protobuf-compiler-grpc python3-grpcio qt6-base-dev grpc-proto python3-pip
+python3 -m pip install grpcio-tools
 ```
 <!-- python3-grpcio-tools ? -->
 
